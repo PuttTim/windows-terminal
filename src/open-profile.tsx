@@ -6,6 +6,9 @@ import { promisify } from "util"
 
 const execAsync = promisify(exec)
 
+// Cache for storing profiles
+const profilesCache = new Map<string, WindowsTerminalProfile[]>();
+
 interface WindowsTerminalProfile {
     name: string
     guid?: string
@@ -57,6 +60,14 @@ async function loadProfiles(): Promise<WindowsTerminalProfile[]> {
             return []
         }
 
+        // Check if we have cached profiles
+        const cachedKey = `${settingsPath}-${preferences.sortOrder}`;
+        const cached = profilesCache.get(cachedKey);
+        
+        if (cached) {
+            return cached;
+        }
+
         // only take profiles that has a name
         let availableProfiles = settings.profiles.list.filter(profile => profile.name)
 
@@ -65,6 +76,9 @@ async function loadProfiles(): Promise<WindowsTerminalProfile[]> {
             availableProfiles = availableProfiles.sort((a, b) => a.name.localeCompare(b.name))
         }
         // If sortOrder is "settings", we can just maintain the original order
+        
+        // Cache the profiles
+        profilesCache.set(cachedKey, availableProfiles);
 
         await showToast({
             style: Toast.Style.Success,
@@ -86,13 +100,14 @@ async function loadProfiles(): Promise<WindowsTerminalProfile[]> {
 async function openProfile(profile: WindowsTerminalProfile) {
     try {
         let command: string
+        const homeDir = process.env.USERPROFILE || process.env.HOME || "~"
 
         if (profile.guid) {
             // Use GUID (by right you can't have duplicate GUID or else WT will error)
-            command = `wt.exe ${quakeMode} -p "${profile.guid}"` 
+            command = `start "" wt.exe ${quakeMode} -p "${profile.guid}" -d "${homeDir}"` 
         } else {
             // Fall back to profile name
-            command = `wt.exe ${quakeMode} -p "${profile.name}"`
+            command = `start "" wt.exe ${quakeMode} -p "${profile.name}" -d "${homeDir}"`
         }
 
         await execAsync(command)
